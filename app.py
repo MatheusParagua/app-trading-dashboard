@@ -1,28 +1,39 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Dashboard Trading", layout="wide")
+st.set_page_config(page_title="Painel de Trading Esportivo", layout="wide")
 st.title("📊 Painel de Trading Esportivo")
+st.markdown("Carregue o Excel com os dados")
 
-uploaded_file = st.file_uploader("Carregue o Excel com os dados", type=["xlsx"])
+uploaded_file = st.file_uploader("Arraste o arquivo aqui", type=["xlsx"])
+
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
+    try:
+        df = pd.read_excel(uploaded_file, sheet_name="Base de dados para BI")
+        st.success("✅ Arquivo carregado com sucesso!")
 
-    if "Lucro / Prejuízo" in df.columns:
-        df["Lucro / Prejuízo"] = pd.to_numeric(df["Lucro / Prejuízo"], errors="coerce")
+        # Corrige possíveis espaços ou quebras nos nomes das colunas
+        df.columns = df.columns.str.strip()
 
-        lucro_total = df["Lucro / Prejuízo"].sum()
-        total_ops = len(df)
-        winrate = (df["Lucro / Prejuízo"] > 0).mean() * 100
+        if 'Profit / Loss' not in df.columns:
+            st.error("Coluna 'Profit / Loss' não encontrada na aba 'Base de dados para BI'.")
+        else:
+            total_profit = df['Profit / Loss'].sum()
+            st.subheader("📌 Visão Geral dos Dados")
+            st.metric("Lucro Total", f"R$ {total_profit:,.2f}")
 
-        st.metric("Lucro Total", f"R$ {lucro_total:,.2f}")
-        st.metric("Taxa de Acerto", f"{winrate:.2f}%")
-        st.metric("Nº Operações", total_ops)
-
-        st.bar_chart(df["Lucro / Prejuízo"])
-    else:
-        st.error("Coluna 'Lucro / Prejuízo' não encontrada no arquivo.")
-else:
-    st.info("Envie um arquivo Excel para começar.")
+            # Gráfico de lucro por dia
+            if 'Data' in df.columns:
+                df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
+                lucro_por_dia = df.groupby('Data')['Profit / Loss'].sum()
+                fig, ax = plt.subplots()
+                lucro_por_dia.plot(kind='bar', ax=ax)
+                ax.set_title("Lucro por Dia")
+                ax.set_ylabel("R$")
+                st.pyplot(fig)
+            else:
+                st.warning("Coluna 'Data' não encontrada para exibir gráfico.")
+    except Exception as e:
+        st.error(f"Erro ao processar o arquivo: {e}")
