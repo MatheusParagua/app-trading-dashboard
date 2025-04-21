@@ -1,78 +1,48 @@
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Painel Trading Avançado", layout="wide")
-st.title("📊 Painel de Trading Esportivo - Ajustado")
+st.set_page_config(page_title="Dashboard Trading", layout="wide")
+st.title("📈 Painel de Trading Esportivo - Resolvido")
 
-uploaded_file = st.file_uploader("📤 Envie sua planilha Excel", type=["xlsx"])
+uploaded_file = st.file_uploader("Envie sua planilha Excel (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file, header=2)
-    df.rename(columns={"Tipo de jogo": "Tipo"}, inplace=True)
+    try:
+        df = pd.read_excel(uploaded_file, header=2)
+        df.rename(columns={
+            "Tipo de jogo": "Tipo",
+        }, inplace=True)
 
-    df = df.dropna(subset=["Data", "Profit / Loss", "Mercado", "Tipo"])
-    df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
-    df = df.dropna(subset=["Data"])
-    df["Mês"] = df["Data"].dt.to_period("M").astype(str)
+        df = df.dropna(subset=["Data", "Profit / Loss", "Mercado", "Tipo"])
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+        df = df.dropna(subset=["Data"])
+        df["Mês"] = df["Data"].dt.to_period("M").astype(str)
 
-    
-    # Filtros (com renomeação das colunas para Time e Liga)
-    df.rename(columns={"Evento": "Time", "Competição": "Liga"}, inplace=True)
-    
-    with st.sidebar:
-        st.header("🔎 Filtros")
-        tipos = st.multiselect("Tipo de operação", df["Tipo"].unique(), default=df["Tipo"].unique())
-        mercados = st.multiselect("Mercado", df["Mercado"].unique(), default=df["Mercado"].unique())
-        datas = st.date_input("Período", [df["Data"].min(), df["Data"].max()])
+        st.success("✅ Planilha carregada com sucesso!")
 
-    df_filtrado = df[
-        (df["Tipo"].isin(tipos)) &
-        (df["Mercado"].isin(mercados)) &
-        (df["Data"] >= pd.to_datetime(datas[0])) &
-        (df["Data"] <= pd.to_datetime(datas[1]))
-    ]
+        # KPIs
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Lucro Total", f"R$ {df['Profit / Loss'].sum():,.2f}")
+        col2.metric("Taxa de Acerto", f"{(df['Profit / Loss'] > 0).mean()*100:.2f}%")
+        col3.metric("Nº de Operações", len(df))
 
-    # KPIs
-    lucro_total = df_filtrado["Profit / Loss"].sum()
-    roi = (lucro_total / abs(df_filtrado["Profit / Loss"]).sum()) * 100
-    acertos = (df_filtrado["Profit / Loss"] > 0).mean() * 100
+        st.markdown("### 📅 Lucro por Dia")
+        st.line_chart(df.groupby("Data")["Profit / Loss"].sum())
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("💰 Lucro Total", f"R$ {lucro_total:,.2f}")
-    col2.metric("📈 ROI", f"{roi:.2f}%")
-    col3.metric("🎯 Taxa de Acerto", f"{acertos:.2f}%")
-    col4.metric("📊 Nº de Operações", len(df_filtrado))
+        st.markdown("### 💼 Lucro por Mercado")
+        st.bar_chart(df.groupby("Mercado")["Profit / Loss"].sum().sort_values())
 
-    # Gráfico Lucro por Dia
-    lucro_dia = df_filtrado.groupby("Data")["Profit / Loss"].sum().reset_index()
-    fig1 = px.bar(lucro_dia, x="Data", y="Profit / Loss", title="Lucro por Dia",
-                  color="Profit / Loss", color_continuous_scale=["red", "green"])
-    st.plotly_chart(fig1, use_container_width=True)
+        st.markdown("### 📈 Lucro por Mês")
+        st.bar_chart(df.groupby("Mês")["Profit / Loss"].sum())
 
-    # Gráfico Lucro por Mercado
-    lucro_mercado = df_filtrado.groupby("Mercado")["Profit / Loss"].sum().reset_index()
-    fig2 = px.bar(lucro_mercado, x="Mercado", y="Profit / Loss", title="Lucro por Mercado",
-                  color="Profit / Loss", color_continuous_scale=["red", "green"])
-    st.plotly_chart(fig2, use_container_width=True)
+        st.markdown("### 🥧 Distribuição por Tipo de Operação")
+        fig, ax = plt.subplots()
+        df["Tipo"].value_counts().plot.pie(autopct="%1.1f%%", ax=ax)
+        st.pyplot(fig)
 
-    
-    # Ranking dos Times
-    st.subheader("🏆 Ranking de Times")
-    lucro_time = df_filtrado.groupby("Time")["Profit / Loss"].sum().sort_values(ascending=False)
-    col_a, col_b = st.columns(2)
-    col_a.markdown("### 🔝 10 Melhores Times")
-    col_a.dataframe(lucro_time.head(10).reset_index())
-    col_b.markdown("### 🔻 10 Piores Times")
-    col_b.dataframe(lucro_time.tail(10).reset_index())
-
-    # Gráfico Lucro por Mês
-    
-    lucro_mes = df_filtrado.groupby("Mês")["Profit / Loss"].sum().reset_index()
-    fig3 = px.bar(lucro_mes, x="Mês", y="Profit / Loss", title="Lucro por Mês",
-                  color="Profit / Loss", color_continuous_scale=["red", "green"])
-    st.plotly_chart(fig3, use_container_width=True)
-
+    except Exception as e:
+        st.error(f"Erro ao carregar a planilha: {e}")
 else:
-    st.info("Envie sua planilha para visualizar os dados.")
+    st.info("Por favor, envie sua planilha Excel para iniciar a análise.")
