@@ -2,63 +2,47 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 
-st.set_page_config(page_title="Painel BI - Trading", layout="wide")
-st.title("📈 Painel de Análise - Trading Esportivo")
+st.set_page_config(page_title="Dashboard Trading", layout="wide")
+st.title("📈 Painel de Trading Esportivo - Resolvido")
 
-# Carregar os dados da aba BASE DE DADOS PARA BI
-df = pd.read_excel("Gestao_de_Banca_Rev 06.xlsx", sheet_name="BASE DE DADOS PARA BI")
-df = df.dropna(subset=["Data", "Profit / Loss", "Mercado", "Tipo"])
-df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
-df = df.dropna(subset=["Data"])
+uploaded_file = st.file_uploader("Envie sua planilha Excel (.xlsx)", type=["xlsx"])
 
-# Filtros laterais
-st.sidebar.header("Filtros")
-data_ini = st.sidebar.date_input("Data inicial", value=df["Data"].min().date())
-data_fim = st.sidebar.date_input("Data final", value=df["Data"].max().date())
-mercado = st.sidebar.multiselect("Mercado", df["Mercado"].unique(), default=df["Mercado"].unique())
-df = df[(df["Data"].dt.date >= data_ini) & (df["Data"].dt.date <= data_fim) & (df["Mercado"].isin(mercado))]
+if uploaded_file:
+    try:
+        df = pd.read_excel(uploaded_file, header=2)
+        df.rename(columns={
+            "Tipo de jogo": "Tipo",
+        }, inplace=True)
 
-# Gráfico 1: Lucro por dia
-st.subheader("📅 Lucro por dia")
-lucro_dia = df.groupby("Data")["Profit / Loss"].sum()
-st.line_chart(lucro_dia)
+        df = df.dropna(subset=["Data", "Profit / Loss", "Mercado", "Tipo"])
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+        df = df.dropna(subset=["Data"])
+        df["Mês"] = df["Data"].dt.to_period("M").astype(str)
 
-# Gráfico 2: Lucro por mercado
-st.subheader("💼 Lucro por mercado")
-lucro_mercado = df.groupby("Mercado")["Profit / Loss"].sum().sort_values()
-st.bar_chart(lucro_mercado)
+        st.success("✅ Planilha carregada com sucesso!")
 
-# Gráfico 3: ROI por mercado
-if "Stake" in df.columns:
-    st.subheader("📈 ROI por mercado")
-    roi_mercado = df.groupby("Mercado").apply(lambda x: x["Profit / Loss"].sum() / x["Stake"].sum() * 100)
-    st.bar_chart(roi_mercado)
+        # KPIs
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Lucro Total", f"R$ {df['Profit / Loss'].sum():,.2f}")
+        col2.metric("Taxa de Acerto", f"{(df['Profit / Loss'] > 0).mean()*100:.2f}%")
+        col3.metric("Nº de Operações", len(df))
 
-# Gráfico 4: Taxa de acerto por competição
-if "Competição" in df.columns:
-    st.subheader("🥇 Taxa de acerto por competição")
-    acertos = df[df["Profit / Loss"] > 0].groupby("Competição").size()
-    total = df.groupby("Competição").size()
-    taxa_acerto = (acertos / total * 100).fillna(0)
-    st.bar_chart(taxa_acerto)
+        st.markdown("### 📅 Lucro por Dia")
+        st.line_chart(df.groupby("Data")["Profit / Loss"].sum())
 
-# Gráfico 5: Pizza por tipo de operação
-st.subheader("🥧 Distribuição por Tipo de Operação")
-tipo_contagem = df["Tipo"].value_counts()
-fig, ax = plt.subplots()
-ax.pie(tipo_contagem, labels=tipo_contagem.index, autopct='%1.1f%%', startangle=90)
-ax.axis("equal")
-st.pyplot(fig)
+        st.markdown("### 💼 Lucro por Mercado")
+        st.bar_chart(df.groupby("Mercado")["Profit / Loss"].sum().sort_values())
 
-# Gráfico 6: Lucro por mês/ano
-st.subheader("📆 Lucro por mês/ano")
-df["AnoMes"] = df["Data"].dt.to_period("M").astype(str)
-lucro_mes = df.groupby("AnoMes")["Profit / Loss"].sum()
-fig2, ax2 = plt.subplots(figsize=(10, 4))
-sns.barplot(x=lucro_mes.index, y=lucro_mes.values, ax=ax2)
-ax2.set_ylabel("Lucro")
-ax2.set_xlabel("Mês/Ano")
-plt.xticks(rotation=45)
-st.pyplot(fig2)
+        st.markdown("### 📈 Lucro por Mês")
+        st.bar_chart(df.groupby("Mês")["Profit / Loss"].sum())
+
+        st.markdown("### 🥧 Distribuição por Tipo de Operação")
+        fig, ax = plt.subplots()
+        df["Tipo"].value_counts().plot.pie(autopct="%1.1f%%", ax=ax)
+        st.pyplot(fig)
+
+    except Exception as e:
+        st.error(f"Erro ao carregar a planilha: {e}")
+else:
+    st.info("Por favor, envie sua planilha Excel para iniciar a análise.")
