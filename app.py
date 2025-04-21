@@ -1,39 +1,37 @@
-
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.express as px
 
 st.set_page_config(page_title="Painel de Trading Esportivo", layout="wide")
 st.title("📊 Painel de Trading Esportivo")
-st.markdown("Carregue o Excel com os dados")
 
-uploaded_file = st.file_uploader("Arraste o arquivo aqui", type=["xlsx"])
-
+uploaded_file = st.file_uploader("📂 Envie seu Excel", type=["xlsx"])
 if uploaded_file:
-    try:
-        df = pd.read_excel(uploaded_file, sheet_name="Base de dados para BI")
-        st.success("✅ Arquivo carregado com sucesso!")
+    df = pd.read_excel(uploaded_file, sheet_name="BASE DE DADOS PARA BI")
+    df.columns = df.columns.str.strip()
 
-        # Corrige possíveis espaços ou quebras nos nomes das colunas
-        df.columns = df.columns.str.strip()
+    if "Data" in df.columns:
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+    if "Profit / Loss" in df.columns:
+        df["Profit / Loss"] = pd.to_numeric(df["Profit / Loss"], errors="coerce")
 
-        if 'Profit / Loss' not in df.columns:
-            st.error("Coluna 'Profit / Loss' não encontrada na aba 'Base de dados para BI'.")
-        else:
-            total_profit = df['Profit / Loss'].sum()
-            st.subheader("📌 Visão Geral dos Dados")
-            st.metric("Lucro Total", f"R$ {total_profit:,.2f}")
+    df = df.dropna(subset=["Data", "Profit / Loss"])
 
-            # Gráfico de lucro por dia
-            if 'Data' in df.columns:
-                df['Data'] = pd.to_datetime(df['Data'], errors='coerce')
-                lucro_por_dia = df.groupby('Data')['Profit / Loss'].sum()
-                fig, ax = plt.subplots()
-                lucro_por_dia.plot(kind='bar', ax=ax)
-                ax.set_title("Lucro por Dia")
-                ax.set_ylabel("R$")
-                st.pyplot(fig)
-            else:
-                st.warning("Coluna 'Data' não encontrada para exibir gráfico.")
-    except Exception as e:
-        st.error(f"Erro ao processar o arquivo: {e}")
+    st.sidebar.header("Filtros")
+    data_range = st.sidebar.date_input("Período", [df["Data"].min(), df["Data"].max()])
+    ligas = st.sidebar.multiselect("Liga", df["Competição"].dropna().unique(), default=df["Competição"].dropna().unique())
+    mercados = st.sidebar.multiselect("Mercado", df["Mercado"].dropna().unique(), default=df["Mercado"].dropna().unique())
+    times = st.sidebar.multiselect("Times", pd.unique(df[["Time 1", "Time 2"]].values.ravel()), default=pd.unique(df[["Time 1", "Time 2"]].values.ravel()))
+
+    df = df[(df["Data"] >= pd.to_datetime(data_range[0])) & (df["Data"] <= pd.to_datetime(data_range[1]))]
+    df = df[df["Competição"].isin(ligas)]
+    df = df[df["Mercado"].isin(mercados)]
+    df = df[(df["Time 1"].isin(times)) | (df["Time 2"].isin(times))]
+
+    st.metric("Lucro Total", f"R$ {df['Profit / Loss'].sum():,.2f}")
+    st.metric("Taxa de Acerto", f"{(df['Profit / Loss'] > 0).mean() * 100:.2f}%")
+    st.metric("Operações", df.shape[0])
+
+    lucro_dia = df.groupby("Data")["Profit / Loss"].sum().reset_index()
+    st.plotly_chart(px.bar(lucro_dia, x="Data", y="Profit / Loss", title="Lucro por Dia",
+                           color="Profit / Loss", color_continuous_scale=["red", "green"]), use_container_width=True)
