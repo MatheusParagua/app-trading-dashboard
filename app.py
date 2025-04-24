@@ -1,3 +1,4 @@
+# Forçando deploy do Streamlit
 
 import streamlit as st
 import pandas as pd
